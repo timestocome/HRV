@@ -28,7 +28,7 @@ import AVFoundation
 import QuartzCore
 import CoreMedia
 import Accelerate
-
+import MobileCoreServices
 
 
 
@@ -51,10 +51,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     var session:AVCaptureSession!
   
     
-    // image information, computered when we start camera
-    var height = 0
-    var width = 0
-    var numberOfPixels = 0
+   
     
     
     // used to compute frames per second
@@ -115,7 +112,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // set up to grab live images from the camera
     func setupCaptureSession () {
         
-        var error: NSError?
+   //     var error: NSError?
         var videoDevice:AVCaptureDevice!
         let videoDevices = AVCaptureDevice.devicesWithMediaType(AVMediaTypeVideo)
         
@@ -128,12 +125,16 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
         
         
-        let videoInput = AVCaptureDeviceInput(device: videoDevice, error: &error )
+        var videoInput : AVCaptureDeviceInput
+        do { videoInput = try AVCaptureDeviceInput(device: videoDevice) } catch { return }
+        
+        
+        
+        //let videoInput = AVCaptureDeviceInput(device: videoDevice, error: &error )
         let dataOutput = AVCaptureVideoDataOutput()
         
-        
-        // output format
-        dataOutput.videoSettings = [kCVPixelBufferPixelFormatTypeKey: kCVPixelFormatType_32BGRA]
+    
+       
         
         
         // set up session
@@ -146,17 +147,23 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // measure pulse from 40-230bpm = ~.5 - 4bps * 2 to remove aliasing need 8 frames/sec minimum
         // preset352x288 ~ 30fps
         session.sessionPreset = AVCaptureSessionPreset352x288
-        height = 352
-        width = 288
-        numberOfPixels = height * width
+        
         
         
         // turn on light
         session.beginConfiguration()
-        videoDevice.lockForConfiguration(&error)
-        videoDevice.setTorchModeOnWithLevel(AVCaptureMaxAvailableTorchLevel, error: &error)
-        videoDevice.unlockForConfiguration()
+        
+        do { try videoDevice.lockForConfiguration()
+        
+            do { try videoDevice.setTorchModeOnWithLevel(AVCaptureMaxAvailableTorchLevel )
+            } catch { return }      // torch mode
+        
+            videoDevice.unlockForConfiguration()
+
+        } catch  { return }         // lock for config
+        
         session.commitConfiguration()
+        
         
         
         // start session
@@ -184,79 +191,70 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // get the image from the camera
-        let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-        
-        
-        // lock buffer
-        CVPixelBufferLockBaseAddress(pixelBuffer!, 0);
-        
-        // grab image info
         let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+
+        // lock buffer
+        CVPixelBufferLockBaseAddress(imageBuffer!, 0)
         
-        // get pointer to the pixel array
-        let src_buff = CVPixelBufferGetBaseAddress(imageBuffer!)
-        let dataBuffer = UnsafeMutablePointer<UInt8>(src_buff)
         
-        // unlock buffer
+        //*************************************************************************
+        // ** this does converge in about 20 seconds but those graphs sure are ugly
+        
+        // this dumps out the format information we need
+        // for this program we'll just hard code it.
+        // ** iPhone 3G is 2vuy format,
+        // incoming signal is in kCVPixelFormatType_420YpCbCrPlanarVideoRange = 420v
+        // base address points to a big-endian CVPlanarPixelBufferInfo_YCbCrBiPlanar struct
+        
+        
+        // 2 planes
+        // width 352, height 288 plane 0
+        // width 176, height 144 plane 1
+        // bits per block 8
+        // CVImageBufferYCbCrMatrix
+        let pixelsLuma = 352 * 288     // Luma buffer (brightness)
+        let pixelsChroma = 174 * 144     // Chromiance buffer (color)
+        
+        let baseAddressLuma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 0)
+        let baseAddressChroma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 1)
+        
+        let dataBufferLuma = UnsafeMutablePointer<UInt8>(baseAddressLuma)
+        let dataBufferChroma = UnsafeMutablePointer<UInt8>(baseAddressChroma)
+        
         CVPixelBufferUnlockBaseAddress(imageBuffer!, 0)
         
         
         
-        // compute the brightness for reg, green, blue and total
-        // pull out color values from pixels ---  image is BGRA
-        var greenVector:[Float] = Array(count: numberOfPixels, repeatedValue: 0.0)
-        var blueVector:[Float] = Array(count: numberOfPixels, repeatedValue: 0.0)
-        var redVector:[Float] = Array(count: numberOfPixels, repeatedValue: 0.0)
         
-        vDSP_vfltu8(dataBuffer, 4, &blueVector, 1, vDSP_Length(numberOfPixels))
-        vDSP_vfltu8(dataBuffer+1, 4, &greenVector, 1, vDSP_Length(numberOfPixels))
-        vDSP_vfltu8(dataBuffer+2, 4, &redVector, 1, vDSP_Length(numberOfPixels))
+        // get pixel data
+        var lumaVector:[Float] = Array(count: pixelsLuma, repeatedValue: 0.0)
+        var chromaVector:[Float] = Array(count: pixelsChroma, repeatedValue: 0.0)
+        
+        vDSP_vfltu8(dataBufferLuma, 1, &lumaVector, 1, vDSP_Length(pixelsLuma))
+        vDSP_vfltu8(dataBufferChroma, 2, &chromaVector, 1, vDSP_Length(pixelsChroma))
         
         
+        var averageLuma:Float = 0.0
+        var averageChroma:Float = 0.0
         
-        // compute average per color
-        var redAverage:Float = 0.0
-        var blueAverage:Float = 0.0
-        var greenAverage:Float = 0.0
-        
-        vDSP_meamgv(&redVector, 1, &redAverage, vDSP_Length(numberOfPixels))
-        vDSP_meamgv(&greenVector, 1, &greenAverage, vDSP_Length(numberOfPixels))
-        vDSP_meamgv(&blueVector, 1, &blueAverage, vDSP_Length(numberOfPixels))
-        
-        
-        
-        // convert to HSV ( hue, saturation, value )
-        // this gives faster, more accurate answer
-        var hue: CGFloat = 0.0
-        var saturation: CGFloat = 0.0
-        var brightness: CGFloat = 0.0
-        var alpha: CGFloat = 1.0
-        
-        var color: UIColor = UIColor(red: CGFloat(redAverage/255.0), green: CGFloat(greenAverage/255.0), blue: CGFloat(blueAverage/255.0), alpha: alpha)
-        color.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
-        
-        
-        // ******* need Power Spectral Density
-        
-        
-        //  ******************************************************************************************
-        // ? vDSP_vswsum ? --- convert this to a vDSP function
-        // 5 count rolling average
-        let currentHueAverage = hue/movingAverageCount
-        movingAverageArray.removeAtIndex(0)
-        movingAverageArray.append(currentHueAverage)
-        
-        let movingAverage = movingAverageArray[0] + movingAverageArray[1] + movingAverageArray[2] + movingAverageArray[3] + movingAverageArray[4]
-
-        
-        
+        vDSP_meamgv(&lumaVector, 1, &averageLuma, vDSP_Length(pixelsLuma))
+        vDSP_meamgv(&chromaVector, 1, &averageChroma, vDSP_Length(pixelsChroma))
         
         // send to graph and fft
         // fft graph settles down when lock on pulse is good
         dispatch_async(dispatch_get_main_queue()){
-            self.graphView.addX(Float(movingAverage))
-            self.collectDataForFFT(Float(movingAverage), green: Float(saturation), blue: Float(brightness))
+            self.graphView.addX(Float(averageLuma))
+            self.collectDataForFFT(Float(averageLuma), green: Float(0.0), blue: Float(0.0))
         }
+
+        
+        
+        
+        // use this to convert image if the luma/chroma doesn't work
+       // vImage_YpCbCrToARGB
+        
+      
+
     }
     
     
@@ -355,8 +353,8 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
         timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
         
-        let binSize = fps * 60.0 / Float(windowSize)
-        let errorSize = fps * 60.0 / Float(windowSize)
+        //let binSize = fps * 60.0 / Float(windowSize)
+        //let errorSize = fps * 60.0 / Float(windowSize)
         
         let bpm = Float(bin) / Float(windowSize) * (fps * 60.0)
         pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
@@ -376,12 +374,12 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 
         var powerLow = powerVector[1] + powerVector[2] + powerVector[3]
         var powerHigh = powerVector[3] + powerVector[4] + powerVector[5] + powerVector[6] + powerVector[7] + powerVector[8] + powerVector[9]
-        var totalPower = powerLow + powerHigh
+        let totalPower = powerLow + powerHigh
         
         // clean up and send to user
         powerLow = powerLow/totalPower
         powerHigh = powerHigh/totalPower
-        let ratio = log(powerLow/powerHigh)
+      //  let ratio = log(powerLow/powerHigh)
         powerLow *= 100.0
         powerHigh *= 100.0
         HFBandLabel.text = ("High Frequency \(Int(powerHigh))")
@@ -415,7 +413,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         var numberOfCrossings:vDSP_Length = 0
         
         vDSP_nzcros(dx, 1, vDSP_Length(dataPointsPerTenSeconds), &indexCrossing, &numberOfCrossings, vDSP_Length(dataPointsPerTenSeconds))
-        var heartRate = Int(numberOfCrossings / 2) * 6      // 10 * 6 = 60 seconds, two crossings per peak
+       // var heartRate = Int(numberOfCrossings / 2) * 6      // 10 * 6 = 60 seconds, two crossings per peak
         
         
         
@@ -424,7 +422,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         var sumPowerVector:Float = 0.0
         vDSP_sve(&powerVector+1, 1, &sumPowerVector, vDSP_Length(windowSize))
         
-        if  sumPowerVector < 1.0 { println("locked ") }
+        if  sumPowerVector < 1.0 { print("locked ") }
         
         
         
