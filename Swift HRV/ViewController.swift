@@ -21,6 +21,20 @@
 // Really good data requires 250-1000Hz we're using 30Hz
 // Should be able to bump phone video up to 120Hz **** look into this
 
+///////////////////////////////////////////////////////////////////////////////
+// To do and bugs
+// graph is ugly - try spreading out points see if that helps
+// redo power spectrum calcs now that we're processing at a good speed
+// calculate HRV and all associated statisical data ...
+// RR Interval
+// LF Power
+// SDNN
+// RMSSD
+// NN50
+// Total Power
+// HRV
+///////////////////////////////////////////////////////////////////////////////
+
 
 import UIKit
 import Foundation
@@ -102,6 +116,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     // data smoothing
+    // way too slow - maybe after every thing else is working I'll revisit this
    // var movingAverageArray:[CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0]      // used to store rolling average
    // var movingAverageCount:CGFloat = 5.0                              // window size
     
@@ -278,6 +293,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 
         
         // collect color data
+        // not now luma is giving good data and much faster to process
        // let baseAddressChroma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 1)
         //let dataBufferChroma = UnsafeMutablePointer<UInt8>(baseAddressChroma)
         
@@ -349,12 +365,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // grab data points from image
     // stuff the data points into an array
     // call fft after we collect a window worth of data points
-    //
-    // one color is plenty for heart rate
-    // others are here only as setup for future projects
+    // Using total brightness rather than any one color to save processing cycles
     func collectDataForFFT( brightness: Float){
         
-        //print("fps: \(fps), average brightness \(brightness)")
         
         // first fill up array
         if  dataCount < windowSize {
@@ -373,9 +386,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             fpsData.append(fps)
         }
         
-        
-        // fps is bouncing all over the place and throwing off our
-        // calculations - let's try a rolling average
         // call fft ~ once per second
         if  fftLoopCount > Int(fps) {
             
@@ -423,12 +433,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 
         ///////////////////////////////////////////////////////////////////////////////
         //  calculate heart beats per minute
-        // filter out the edges - anything lower than 35bpm or greater than 225 bpm
-        // this speed up time to get a good reading even if data is filtered
-       // let minHeartRate = 10                                      // skip anything lower ~35 bpm
-       // let maxHeartRate = 85                                       // skip anything over ~300 bpm
-        //vDSP_maxvi(&powerVector+minHeartRate, 1, &power, &bin, vDSP_Length(maxHeartRate))
-        //bin += vDSP_Length(minHeartRate)
+        // We're looking for the bin with the highest power ( strongest frequency )
         vDSP_maxvi(&powerVector+1, 1, &power, &bin, vDSP_Length(windowSizeOverTwo))
         bin += 1
         
@@ -437,13 +442,12 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
         timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
         
+        
         //let binSize = fps * 60.0 / Float(windowSize)
         //let errorSize = fps * 60.0 / Float(windowSize)
         
-        
-        print("Current FPS \(averageFPS)")
-         let bpm = Float(bin) / Float(windowSize) * (averageFPS * 60.0)
-       // let bpm = Float(bin) / Float(windowSize) * (fps * 60.0)
+        // FPS are bouncy - use an avearge to calculate HR
+        let bpm = Float(bin) / Float(windowSize) * (averageFPS * 60.0)
         pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
         
         powerView.addAll(powerVector)
