@@ -18,6 +18,7 @@ class GraphView: UIView
     var area: CGRect!
     var maxPoints: Int!
     var height: CGFloat!
+    var halfHeight: CGFloat!
     var scale:Float = 1.0
 
     
@@ -37,9 +38,10 @@ class GraphView: UIView
         area = frame
         maxPoints = Int(area.size.width)
         height = CGFloat(area.size.height)
+        halfHeight = CGFloat(height/2.0)
         
         dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
-        scale = Float(area.height) * 100.0       // view height /max possible value * scaled up to show small details
+        scale = Float(area.height) * 10.0       // view height /max possible value * scaled up to show small details
         
         setNeedsDisplay()   
         
@@ -55,7 +57,7 @@ class GraphView: UIView
         
         
         // scale incoming data and insert it into data array
-        let xScaled = CGFloat(x * scale % Float(height))
+        let xScaled = CGFloat(x * scale % Float(halfHeight))
         
         dataArrayX.insert(xScaled, atIndex: 0)
         dataArrayX.removeLast()
@@ -72,13 +74,14 @@ class GraphView: UIView
         
         for i in 1..<maxPoints {
             
-            let mark = CGFloat(i)
+            let x1 = CGFloat(i) * 3.0
+            let x2 = CGFloat(i-1) * 3.0
             
             // plot x
-            CGContextMoveToPoint(context, mark-1, height - self.dataArrayX[i-1] )
-            CGContextAddLineToPoint(context, mark, height - self.dataArrayX[i] )
+            CGContextMoveToPoint(context, x2, height - self.dataArrayX[i-1] )
+            CGContextAddLineToPoint(context, x1, height - self.dataArrayX[i] )
             
-            CGContextSetLineWidth(context, 3.0)
+            CGContextSetLineWidth(context, 2.0)
             CGContextStrokePath(context)
                         
         }

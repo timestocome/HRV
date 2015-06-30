@@ -23,8 +23,11 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // To do and bugs
-// graph is ugly - try spreading out points see if that helps
-// redo power spectrum calcs now that we're processing at a good speed
+// power is all over the place because fps jumps between 230-240 once things settle
+// need a good rolling average algorithm or maybe smaller window funcitons?
+// need to settle down data to get a good reading
+// ? send rolling average to graph? maybe every half second? or smooth in graph class?
+//
 // calculate HRV and all associated statisical data ...
 // RR Interval
 // LF Power
@@ -54,8 +57,10 @@ let pixelsUorVChroma = 25056 / 2        // split color into U and V
 
 
 // same thing, hard coded FFT numbers, better to change them once here
-let windowSize = 1024               // granularity of the measurement, error
-let windowSizeOverTwo = 512         // for fft
+// lower numbers converge faster and remain steady, but increase the error size
+let windowSize = 4096               // granularity of the measurement, error
+let windowSizeOverTwo = 2048         // for fft
+
 
 
 
@@ -115,10 +120,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     var fpsData:[Float] = Array(count: windowSize, repeatedValue: 0.0)
     
     
-    // data smoothing
-    // way too slow - maybe after every thing else is working I'll revisit this
-   // var movingAverageArray:[CGFloat] = [0.0, 0.0, 0.0, 0.0, 0.0]      // used to store rolling average
-   // var movingAverageCount:CGFloat = 5.0                              // window size
     
     
   
@@ -132,6 +133,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         log2n = vDSP_Length(log2(Double(windowSize)))
         setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
         
+        
         // init graphs
         graphView.setupGraphView()
         powerView.setupGraphView()
@@ -140,8 +142,11 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 
     
       
-    func setupCamera (){
+    func setupCamera( setFPS:Float64){
     
+        
+        fps = Float(setFPS)
+        
         let videoDevices = AVCaptureDevice.devicesWithMediaType(AVMediaTypeVideo)
         
         
@@ -166,7 +171,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             let ranges = format.videoSupportedFrameRateRanges as! [AVFrameRateRange]
             
             for range in ranges {
-                if range.maxFrameRate >= 240 {
+                if range.maxFrameRate >= setFPS {
                     bestFormat = format as! AVCaptureDeviceFormat
                     bestFrameRate = range
                 }
@@ -193,6 +198,18 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     
+        
+        
+        
+
+        
+        
+        
+    
+    
+
+
+
     
     
     // set up to grab live images from the camera
@@ -347,11 +364,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         }
 
         
-        // ? use this to convert image if the luma/chroma doesn't work ?
-        // dunno - seen several formulas on difference sites, check this
-        // ? R = Y - 1.403V'
-        // B = Y + 1.770U'
-        // G = Y - 0.344U' - 0.714V'
+        
 
     }
     
@@ -367,6 +380,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // call fft after we collect a window worth of data points
     // Using total brightness rather than any one color to save processing cycles
     func collectDataForFFT( brightness: Float){
+        
+        
+       
         
         
         // first fill up array
@@ -388,8 +404,10 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         // call fft ~ once per second
         if  fftLoopCount > Int(fps) {
-            
+            // fps?
             vDSP_meamgv(&fpsData, 1, &averageFPS, vDSP_Length(windowSize))
+            
+            
             fftLoopCount = 0
             FFT()
         }else{
@@ -412,7 +430,22 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         var cplxData = DSPSplitComplex( realp: &zerosR, imagp: &zerosI )
 
         
-        // use raw unfiltered data
+        // tried this, slows down calculations and makes them more erratic
+        // window data smoothing
+       // var window:[Float] = Array(count: windowSize, repeatedValue: 0.0)
+       // var smoothedSignal:[Float] = Array (count: windowSize, repeatedValue: 0.0)
+       // vDSP_hann_window(&window, vDSP_Length(windowSize), 0)
+        //vDSP_hamm_window(&window, vDSP_Length(windowSize), 0)
+      //  vDSP_blkman_window(&window, vDSP_Length(windowSize), 0)
+        
+       // vDSP_vmul(inputSignal, 1, window, 1, &smoothedSignal, 1, vDSP_Length(windowSize))
+        
+        
+       //  let xAsComplex = UnsafePointer<DSPComplex>( smoothedSignal.withUnsafeBufferPointer { $0.baseAddress } )
+       //  vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
+
+        
+        // cast original data as complex
          let xAsComplex = UnsafePointer<DSPComplex>( inputSignal.withUnsafeBufferPointer { $0.baseAddress } )
          vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
         
@@ -443,14 +476,19 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
         
         
-        //let binSize = fps * 60.0 / Float(windowSize)
-        //let errorSize = fps * 60.0 / Float(windowSize)
         
         // FPS are bouncy - use an avearge to calculate HR
         let bpm = Float(bin) / Float(windowSize) * (averageFPS * 60.0)
-        pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
+        if bpm > 35 && bpm < 250 {
+            pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
+        }
+        
         
         powerView.addAll(powerVector)
+
+        let binSize = 1.0 / Float(windowSize) * averageFPS * 60.0
+        let maxBin = binSize * Float(windowSize)
+        print("BinSize \(binSize), lowest \(binSize * 5.0), highest \(maxBin)")
 
         
         
@@ -459,24 +497,24 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // heart rate between sympathetic and parasympathetic
         // transition to sleep drops power percent in low frequency band from 62-44% to 46-36%
         // measure total power between 0.04 hz and 0.5 hz
-        // power low = 0.04-0.15 hz sympathetic activity   (bins 1..3)      // prepare body for action
-        // power high = 0.15-0.5 hz parasympathetic activity (bins 3..9)    // tranquil functions, rest and digest, feed and breed
-        // * We have a bit of overlap here, a window size of 512 isn't samll enough to sharply divide the two bands
+        // power low = 0.04-0.15 hz sympathetic activity                    // prepare body for action
+        // power high = 0.15-0.5 hz parasympathetic activity                // tranquil functions, rest and digest, feed and breed
 
-        //var powerLow = powerVector[1] + powerVector[2] + powerVector[3]
-        //var powerHigh = powerVector[3] + powerVector[4] + powerVector[5] + powerVector[6] + powerVector[7] + powerVector[8] + powerVector[9]
-        //let totalPower = powerLow + powerHigh
+        var powerLow = powerVector[1]
+        var powerHigh = powerVector[2] + powerVector[3]
+        let totalPower = powerLow + powerHigh
         
         // clean up and send to user
-       // powerLow = powerLow/totalPower
-       // powerHigh = powerHigh/totalPower
-      //  let ratio = log(powerLow/powerHigh)
-       // powerLow *= 100.0
-       // powerHigh *= 100.0
-      //  HFBandLabel.text = ("High Frequency \(Int(powerHigh))")
-       // LFBandLabel.text = ("Low Frequency \(Int(powerLow))")
+        powerLow = powerLow/totalPower
+        powerHigh = powerHigh/totalPower
+        let ratio = log(powerLow/powerHigh)
+        powerLow *= 100.0
+        powerHigh *= 100.0
+        HFBandLabel.text = ("High Frequency \(Int(powerHigh))")
+        LFBandLabel.text = ("Low Frequency \(Int(powerLow))")
         
         
+        print("Ratio: \(ratio) PowerLow \(powerLow), PowerHigh \(powerHigh) BPM \(bpm), FPS \(fps)")
         
         
         
@@ -562,7 +600,11 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     }
     
     
-    
+    // adjust window size to fps
+    // if fps = 30, then window size 512(3.5 bpm), 1024(2bpm), 2048(1bpm)
+    // if fps = 60, then window size 1024(3.5 bpm), 2048(2bpm)
+    // if fps = 120, then window size 2048(3.5 bpm)
+    // if fps = 240, then window size 4096(3.5 bpm)
     @IBAction func start(){
         
         // init graphs
@@ -570,7 +612,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         powerView.setupGraphView()
 
         timeElapsedStart = NSDate()     // reset clock
-        setupCamera()                   // setup device
+        setupCamera(240.0)                   // setup device with preferred frames per second
         setupCaptureSession()           // start camera
     }
     

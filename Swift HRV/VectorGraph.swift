@@ -19,7 +19,10 @@ class VectorGraph: UIView
     var area: CGRect!
     var maxPoints: Int!
     var height: CGFloat!
+    var halfHeight: CGFloat!
+    var width: CGFloat!
     var scale:Float = 1.0
+    var xScale:CGFloat = 1.0
     var numberOfDataPoints = 1
     
     
@@ -38,10 +41,13 @@ class VectorGraph: UIView
         
         area = frame
         maxPoints = Int(area.size.width)
-        height = CGFloat(area.size.height) 
+        height = CGFloat(area.size.height)
+        halfHeight = height/2.0
+        width = CGFloat(area.size.width)
         
         dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
         scale = Float(area.height)       // view height /max possible value * scaled up to show small details
+
         
         setNeedsDisplay()
         
@@ -56,11 +62,12 @@ class VectorGraph: UIView
     func addAll(x: [Float]){
         
         //***************   get max and figure out a scale ***************//
-        dataArrayX = x.map { CGFloat($0 as Float) * 800.0 % self.height }
+        dataArrayX = x.map { CGFloat($0 as Float) * 100.0 % self.halfHeight }
         dataArrayX.removeAtIndex(0)
         
         numberOfDataPoints = dataArrayX.count
-        
+        xScale = CGFloat(numberOfDataPoints)/width
+                
         setNeedsDisplay()
     }
     
