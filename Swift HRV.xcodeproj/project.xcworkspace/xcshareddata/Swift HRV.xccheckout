@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDESourceControlProjectFavoriteDictionaryKey</key>
+	<false/>
+	<key>IDESourceControlProjectIdentifier</key>
+	<string>A89AA0C0-EF38-479A-8005-97288B8A99DA</string>
+	<key>IDESourceControlProjectName</key>
+	<string>Swift HRV</string>
+	<key>IDESourceControlProjectOriginsDictionary</key>
+	<dict>
+		<key>0E69B87E1654186908A9BCB1399D5EA8BBF8107A</key>
+		<string>https://github.com/timestocome/HRV.git</string>
+	</dict>
+	<key>IDESourceControlProjectPath</key>
+	<string>Swift HRV.xcodeproj</string>
+	<key>IDESourceControlProjectRelativeInstallPathDictionary</key>
+	<dict>
+		<key>0E69B87E1654186908A9BCB1399D5EA8BBF8107A</key>
+		<string>../..</string>
+	</dict>
+	<key>IDESourceControlProjectURL</key>
+	<string>https://github.com/timestocome/HRV.git</string>
+	<key>IDESourceControlProjectVersion</key>
+	<integer>111</integer>
+	<key>IDESourceControlProjectWCCIdentifier</key>
+	<string>0E69B87E1654186908A9BCB1399D5EA8BBF8107A</string>
+	<key>IDESourceControlProjectWCConfigurations</key>
+	<array>
+		<dict>
+			<key>IDESourceControlRepositoryExtensionIdentifierKey</key>
+			<string>public.vcs.git</string>
+			<key>IDESourceControlWCCIdentifierKey</key>
+			<string>0E69B87E1654186908A9BCB1399D5EA8BBF8107A</string>
+			<key>IDESourceControlWCCName</key>
+			<string>HRV</string>
+		</dict>
+	</array>
+</dict>
+</plist>

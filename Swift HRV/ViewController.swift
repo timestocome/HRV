@@ -24,7 +24,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 // To do and bugs
 // power is all over the place because fps jumps between 230-240 once things settle
-// need a good rolling average algorithm or maybe smaller window funcitons?
+// need a good rolling average algorithm or maybe smaller window functions?
 // need to settle down data to get a good reading
 // ? send rolling average to graph? maybe every half second? or smooth in graph class?
 //
@@ -58,8 +58,12 @@ let pixelsUorVChroma = 25056 / 2        // split color into U and V
 
 // same thing, hard coded FFT numbers, better to change them once here
 // lower numbers converge faster and remain steady, but increase the error size
-let windowSize = 4096               // granularity of the measurement, error
-let windowSizeOverTwo = 2048         // for fft
+let windowSize = 1024              // granularity of the measurement, error
+let windowSizeOverTwo = 512         // for fft
+
+
+let cameraFPS:Float = 60.0
+
 
 
 
@@ -109,8 +113,19 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // keeping things lean and outside of the image processing functions
     var log2n:vDSP_Length = 0
     var fps:Float = 240.0                 // fps === hz, we're recalculating this on the fly in image loop
-    var averageFPS:Float = 240.0
+    var averageFPS:Float = cameraFPS
     var setup:COpaquePointer!
+    
+    
+    
+    // windowing stuff - used to remove high and low end of range
+    // acts like a bandwidth filter
+    let binSize = 1.0 / Float(windowSize) * (cameraFPS * 60.0)
+    
+    // adjust constants to remove hr <30bpm and > 300 bpm
+    let minHR:Int = Int(60.0 * Float(windowSize)/(cameraFPS * 60.0))
+    let maxHR:vDSP_Length = vDSP_Length(900.0 * Float(windowSize)/(cameraFPS * 60.0))
+
     
     
     // collects data from image and stores for fft
@@ -142,7 +157,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
 
     
       
-    func setupCamera( setFPS:Float64){
+    func setupCamera( setFPS:Float){
     
         
         fps = Float(setFPS)
@@ -159,7 +174,8 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // set video input to back camera
-        do { videoInput = try AVCaptureDeviceInput(device: videoDevice) } catch { return }
+        do {
+            videoInput = try AVCaptureDeviceInput(device: videoDevice) } catch { return }
         
         
         
@@ -171,7 +187,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
             let ranges = format.videoSupportedFrameRateRanges as! [AVFrameRateRange]
             
             for range in ranges {
-                if range.maxFrameRate >= setFPS {
+                if range.maxFrameRate >= Float64(setFPS) {
                     bestFormat = format as! AVCaptureDeviceFormat
                     bestFrameRate = range
                 }
@@ -281,49 +297,14 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         CVPixelBufferLockBaseAddress(imageBuffer!, 0)
         
         
-    
-        //*************************************************************************
-        // incoming is YUV format - get format info using this
-        // let description = CMSampleBufferGetFormatDescription(sampleBuffer)
-        //print(description)
-        
-        
-        // yes you can grab the data every frame but we really need speed here so hard code every thing we can
-        // we're also going to declare as many things as we can once as globals rather than recreate each pass
-        // through the loop
-        // 2 planes
-        // width, height plane 0
-        // width/2, height/2 plane 1
-        // bits per block 8
-        // CVImageBufferYCbCrMatrix
-        
-        
-        //let height = CVPixelBufferGetHeight(imageBuffer!)
-        //let width = CVPixelBufferGetWidth(imageBuffer!)
-        //let numberOfPixels = height * width
-        
-        
+
         
         // collect brightness data
         let baseAddressLuma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 0)
         let dataBufferLuma = UnsafeMutablePointer<UInt8>(baseAddressLuma)
 
         
-        // collect color data
-        // not now luma is giving good data and much faster to process
-       // let baseAddressChroma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 1)
-        //let dataBufferChroma = UnsafeMutablePointer<UInt8>(baseAddressChroma)
-        
-        
-        
-        
         CVPixelBufferUnlockBaseAddress(imageBuffer!, 0)
-        
-        
-        
-        
-        //* can use luma, chroma, chromaU or chromaV to get correct answer in 20 seconds
-        //  none of the graphs look good. May need to pull out RGB for UI
         
         
         // get pixel data
@@ -331,30 +312,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         vDSP_vfltu8(dataBufferLuma, 1, &lumaVector, 1, vDSP_Length(pixelsLuma))
         vDSP_meamgv(&lumaVector, 1, &averageLuma, vDSP_Length(pixelsLuma))
 
-        
-        
-        /*
-        // pixel color data
-        var chromaVector:[Float] = Array(count: pixelsChroma, repeatedValue: 0.0)
-        vDSP_vfltu8(dataBufferChroma, 1, &chromaVector, 1, vDSP_Length(pixelsChroma))
-        var averageChroma:Float = 0.0
-        vDSP_meamgv(&chromaVector, 1, &averageChroma, vDSP_Length(pixelsChroma))
-
-        // split color into U/V
-        var chromaUVector:[Float] = Array(count: pixelsUorVChroma, repeatedValue: 0.0)  // Cb
-        var chromaVVector:[Float] = Array(count: pixelsUorVChroma, repeatedValue: 0.0)  // Cr
-        
-        vDSP_vfltu8(dataBufferChroma, 2, &chromaUVector, 1, vDSP_Length(pixelsUorVChroma))
-        vDSP_vfltu8(dataBufferChroma+1, 2, &chromaVVector, 1, vDSP_Length(pixelsUorVChroma))
-        
-        var averageUChroma:Float = 0.0
-        var averageVChroma:Float = 0.0
-        
-        vDSP_meamgv(&chromaUVector, 1, &averageUChroma, vDSP_Length(pixelsUorVChroma))
-        vDSP_meamgv(&chromaVVector, 1, &averageVChroma, vDSP_Length(pixelsUorVChroma))
-        */
-        
-        
         
         // send to graph and fft
         // fft graph settles down when lock on pulse is good
@@ -433,16 +390,16 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // tried this, slows down calculations and makes them more erratic
         // window data smoothing
        // var window:[Float] = Array(count: windowSize, repeatedValue: 0.0)
-       // var smoothedSignal:[Float] = Array (count: windowSize, repeatedValue: 0.0)
-       // vDSP_hann_window(&window, vDSP_Length(windowSize), 0)
+        //var smoothedSignal:[Float] = Array (count: windowSize, repeatedValue: 0.0)
+        //vDSP_hann_window(&window, vDSP_Length(windowSize), 0)
         //vDSP_hamm_window(&window, vDSP_Length(windowSize), 0)
       //  vDSP_blkman_window(&window, vDSP_Length(windowSize), 0)
         
-       // vDSP_vmul(inputSignal, 1, window, 1, &smoothedSignal, 1, vDSP_Length(windowSize))
+        //vDSP_vmul(inputSignal, 1, window, 1, &smoothedSignal, 1, vDSP_Length(windowSize))
         
         
-       //  let xAsComplex = UnsafePointer<DSPComplex>( smoothedSignal.withUnsafeBufferPointer { $0.baseAddress } )
-       //  vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
+         //let xAsComplex = UnsafePointer<DSPComplex>( smoothedSignal.withUnsafeBufferPointer { $0.baseAddress } )
+        // vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
 
         
         // cast original data as complex
@@ -467,9 +424,10 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         ///////////////////////////////////////////////////////////////////////////////
         //  calculate heart beats per minute
         // We're looking for the bin with the highest power ( strongest frequency )
-        vDSP_maxvi(&powerVector+1, 1, &power, &bin, vDSP_Length(windowSizeOverTwo))
-        bin += 1
-        
+                vDSP_maxvi(&powerVector+minHR, 1, &power, &bin, maxHR)
+        let selectedBin = Int(bin) +  Int(minHR)
+        print("MinHR \(minHR), MaxHR \(maxHR)")
+
         
         // push heart rate data to the user
         let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
@@ -478,17 +436,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // FPS are bouncy - use an avearge to calculate HR
-        let bpm = Float(bin) / Float(windowSize) * (averageFPS * 60.0)
+        let bpm = Float(selectedBin) / Float(windowSize) * (fps * 60.0)
         if bpm > 35 && bpm < 250 {
             pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
         }
         
         
         powerView.addAll(powerVector)
-
-        let binSize = 1.0 / Float(windowSize) * averageFPS * 60.0
-        let maxBin = binSize * Float(windowSize)
-        print("BinSize \(binSize), lowest \(binSize * 5.0), highest \(maxBin)")
 
         
         
@@ -612,7 +566,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         powerView.setupGraphView()
 
         timeElapsedStart = NSDate()     // reset clock
-        setupCamera(240.0)                   // setup device with preferred frames per second
+        setupCamera(cameraFPS)          // setup device with preferred frames per second
         setupCaptureSession()           // start camera
     }
     
