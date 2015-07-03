@@ -6,11 +6,9 @@
 //  Copyright (c) 2015 TimesToCome Mobile. All rights reserved.
 //
 
-// papers
-// http://circ.ahajournals.org/content/91/7/1918.full
-// http://www.journalsleep.org/Articles/220807.pdf
-// http://www.atcormedical.com/pdf/TN13%20-%20HRV%20Performing%20and%20Understanding%20HRV%20Measurements.pdf
-
+// papers, texts etc
+// http://www.hrv4training.com/blog/heart-rate-variability-a-primer
+//http://www.hrv4training.com/blog/heart-rate-variability-using-the-phones-camera
 
 // wiki
 // http://en.wikipedia.org/wiki/Heart_rate_variability
@@ -23,19 +21,22 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 // To do and bugs
-// power is all over the place because fps jumps between 230-240 once things settle
-// need a good rolling average algorithm or maybe smaller window functions?
-// need to settle down data to get a good reading
-// ? send rolling average to graph? maybe every half second? or smooth in graph class?
 //
 // calculate HRV and all associated statisical data ...
-// RR Interval
-// LF Power
-// SDNN
-// RMSSD
-// NN50
-// Total Power
-// HRV
+// HRV - heart rate variability - differences between R peaks in pulse
+// higher stress lower HRV, lower stress greater HRV
+
+// RR Interval - time difference between R peaks
+// LF - power difference between 0.05-0.15hz (sympathetic)
+// * HF - power band between 0.15-0.5Hz (parasympathetic)
+// NN - RR invterval with any peak <> 20% of previous time diff discarded
+// SDNN - standard deviation of NN intervals
+// AVNN - mean of NN
+// * rMSSD - root mean square of NN intervals
+// pNN50 number of NN pairs differing by > 50 ms
+//
+// - if all is working well 1 minute of smoothed data should be sufficient
+
 ///////////////////////////////////////////////////////////////////////////////
 
 
@@ -52,19 +53,20 @@ import MobileCoreServices
 // keep this here, since we are hard coding everything to save processing cycles
 // this makes it easier to change iamge dimension information
 let pixelsLuma = 1280 * 720             // Luma buffer (brightness)
-let pixelsChroma = 174 * 144            // Chromiance buffer (color)
-let pixelsUorVChroma = 25056 / 2        // split color into U and V
 
 
 // same thing, hard coded FFT numbers, better to change them once here
 // lower numbers converge faster and remain steady, but increase the error size
-let windowSize = 1024              // granularity of the measurement, error
-let windowSizeOverTwo = 512         // for fft
+let windowSize = 2048             // granularity of the measurement, error
+let windowSizeOverTwo = 1024         // for fft
 
 
 let cameraFPS:Float = 60.0
 
 
+// fastest, more accurate HR measurment uses
+// 60 fps, window size of 1024
+// minHRBin of 17 and max of 256 when finding max power
 
 
 
@@ -112,19 +114,22 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // FFT setup stuff, also used in pulse calculations
     // keeping things lean and outside of the image processing functions
     var log2n:vDSP_Length = 0
-    var fps:Float = 240.0                 // fps === hz, we're recalculating this on the fly in image loop
+    var fps:Float = cameraFPS                                           // fps === hz, we're recalculating this on the fly in image loop
     var averageFPS:Float = cameraFPS
     var setup:COpaquePointer!
     
     
     
     // windowing stuff - used to remove high and low end of range
-    // acts like a bandwidth filter
-    let binSize = 1.0 / Float(windowSize) * (cameraFPS * 60.0)
+    // acts like a bandwidth filter and makes a dramatic difference in 
+    // time it take sto get a firm HR reading
+    let binSizeBPM = 1.0 / Float(windowSize) * (cameraFPS * 60.0)
+    
+    
     
     // adjust constants to remove hr <30bpm and > 300 bpm
-    let minHR:Int = Int(60.0 * Float(windowSize)/(cameraFPS * 60.0))
-    let maxHR:vDSP_Length = vDSP_Length(900.0 * Float(windowSize)/(cameraFPS * 60.0))
+    var minHRBinNumber:Int!
+    var maxHRBinNumber:vDSP_Length!
 
     
     
@@ -136,30 +141,77 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     
+    // measure low frequency/ high frequency ratio
+    // moved here to minimize calculations inside processing loop
+    var binHz:Float!
+    var lowPowerBinStart:Int!
+    var lowPowerBinEnd:Int!
+    var highPowerBinStart:Int!
+    var highPowerBinEnd:Int!
     
-  
+    
+    
+
     
     
     // set up
     override func viewDidLoad() {
         super.viewDidLoad()
         
+        setupFFT()
+        setupGraphs()
+        setupHRConstants()
+        setupHFLFConstants()
+    }
+    
+    
+    
+    func setupFFT(){
         // set up memory for FFT
         log2n = vDSP_Length(log2(Double(windowSize)))
         setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
-        
+    }
+
+    
+    
+    func setupGraphs(){
         
         // init graphs
         graphView.setupGraphView()
         powerView.setupGraphView()
+
     }
     
+    
+    
+    func setupHRConstants(){
+        // adjust a few fps dependent constants
+        // needed to calculate HR
+        // adjust constants to remove hr <30bpm and > 300 bpm
+        
+        minHRBinNumber = Int(30.0 / binSizeBPM)
+        maxHRBinNumber = vDSP_Length( 300.0 / binSizeBPM )
 
+    }
+    
+    
+    
+    func setupHFLFConstants(){
+        // set up constants for measuring LF/HF HRV
+        binHz = 1.0 / Float(windowSize) * cameraFPS
+        
+        lowPowerBinStart = Int(0.05/binHz)
+        lowPowerBinEnd = Int(0.15/binHz)
+        highPowerBinStart = Int(0.15/binHz)
+        highPowerBinEnd = Int(0.5/binHz)
+    }
+    
+    
+    
     
       
     func setupCamera( setFPS:Float){
     
-        
         fps = Float(setFPS)
         
         let videoDevices = AVCaptureDevice.devicesWithMediaType(AVMediaTypeVideo)
@@ -278,9 +330,8 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     
-    // grab each camera image,
-    // split into red, green, blue pixels,
-    // compute average red, green blue pixel value per frame
+    // grab each camera image, 200 hz is usually used on ECG
+    //
     func captureOutput(captureOutput: AVCaptureOutput!, didOutputSampleBuffer sampleBuffer: CMSampleBuffer!, fromConnection connection: AVCaptureConnection!) {
         
         
@@ -297,8 +348,6 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         CVPixelBufferLockBaseAddress(imageBuffer!, 0)
         
         
-
-        
         // collect brightness data
         let baseAddressLuma = CVPixelBufferGetBaseAddressOfPlane(imageBuffer!, 0)
         let dataBufferLuma = UnsafeMutablePointer<UInt8>(baseAddressLuma)
@@ -307,11 +356,32 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         CVPixelBufferUnlockBaseAddress(imageBuffer!, 0)
         
         
-        // get pixel data
-        // brightness
+        // get pixel data brightness
         vDSP_vfltu8(dataBufferLuma, 1, &lumaVector, 1, vDSP_Length(pixelsLuma))
         vDSP_meamgv(&lumaVector, 1, &averageLuma, vDSP_Length(pixelsLuma))
 
+        
+        // need to smooth it here, ? 4th order butterworth band pass to remove dc component and HF noise
+        // 5 point rolling average? to smooth data
+        // ? vDSP_vswsum
+        
+        // interpolate or speed up camera? 180hz-240hz
+        //
+        
+        
+        // peak detection slope inversion algorithm? * look this up
+        // or just use derivative? need to avoid double peaks counting as two
+        
+        
+        // ditch artifacts
+        // he used a 10 second window and ditched peaks <> 20% of previous
+        // also ditched windows with less than 4 peaks or more than 50% of peaks removed
+        
+        
+        
+        
+        
+        
         
         // send to graph and fft
         // fft graph settles down when lock on pulse is good
@@ -338,9 +408,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // Using total brightness rather than any one color to save processing cycles
     func collectDataForFFT( brightness: Float){
         
-        
-       
-        
+    
         
         // first fill up array
         if  dataCount < windowSize {
@@ -387,77 +455,95 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         var cplxData = DSPSplitComplex( realp: &zerosR, imagp: &zerosI )
 
         
-        // tried this, slows down calculations and makes them more erratic
-        // window data smoothing
-       // var window:[Float] = Array(count: windowSize, repeatedValue: 0.0)
-        //var smoothedSignal:[Float] = Array (count: windowSize, repeatedValue: 0.0)
-        //vDSP_hann_window(&window, vDSP_Length(windowSize), 0)
-        //vDSP_hamm_window(&window, vDSP_Length(windowSize), 0)
-      //  vDSP_blkman_window(&window, vDSP_Length(windowSize), 0)
+        // Heart rate variability
         
-        //vDSP_vmul(inputSignal, 1, window, 1, &smoothedSignal, 1, vDSP_Length(windowSize))
+        // collect RR intervals in time domain
+        
+        // remove RR intervals <> 20% of previous time diff
+        
+        // interpolate NN at 4Hz ( 1 point every 250 ms) ( need evenly spaced data for fft )
+        // vDSP_lint?
+        
+        // remove DC component
+        
+        // convert to seconds
         
         
-         //let xAsComplex = UnsafePointer<DSPComplex>( smoothedSignal.withUnsafeBufferPointer { $0.baseAddress } )
-        // vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
-
-        
+        ////////////////////////////////////////////////////////////////////////////////////////////
+        // FFT
         // cast original data as complex
          let xAsComplex = UnsafePointer<DSPComplex>( inputSignal.withUnsafeBufferPointer { $0.baseAddress } )
          vDSP_ctoz( xAsComplex, 2, &cplxData, 1, vDSP_Length(windowSizeOverTwo) )
         
-        
         //perform fft - float, real, discrete, in place
         vDSP_fft_zrip( setup, &cplxData, 1, log2n, FFTDirection(kFFTDirection_Forward) )
-        
-        
         
         //calculate power                                                                   
         var powerVector = [Float](count: windowSizeOverTwo, repeatedValue: 0.0)
         vDSP_zvmags(&cplxData, 1, &powerVector, 1, vDSP_Length(windowSizeOverTwo))
         
-        // find peak power and bin
-        var power = 0.0 as Float
-        var bin = 0 as vDSP_Length
+        
+        
+        
+        calculateHeartRate(powerVector)
+
+        calculateHF_LF(powerVector)
+        
+        calculateStats()
         
 
-        ///////////////////////////////////////////////////////////////////////////////
-        //  calculate heart beats per minute
-        // We're looking for the bin with the highest power ( strongest frequency )
-                vDSP_maxvi(&powerVector+minHR, 1, &power, &bin, maxHR)
-        let selectedBin = Int(bin) +  Int(minHR)
-        print("MinHR \(minHR), MaxHR \(maxHR)")
-
+    }
+    
+    
+    
+    
+    func calculateStats (){
+    
+        // RR interval, need time difference between R peaks
         
-        // push heart rate data to the user
-        let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
-        timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
-        
+        // NN is RR interval with junk cleaned out (diff > 20%)
         
         
-        // FPS are bouncy - use an avearge to calculate HR
-        let bpm = Float(selectedBin) / Float(windowSize) * (fps * 60.0)
-        if bpm > 35 && bpm < 250 {
-            pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
-        }
+        // AVNN - mean NN - use
+        // vDSP_meanv ?
         
         
-        powerView.addAll(powerVector)
-
+        // SDNN - standard deviation
+        // vDSP_rmsqv ? of  sqrt ( sum (NN - AVNN)^2 / n )
         
         
-        /////////////////////////////////////////////////////////////////////////////
-        //  are we drifting off to sleep?
-        // heart rate between sympathetic and parasympathetic
-        // transition to sleep drops power percent in low frequency band from 62-44% to 46-36%
-        // measure total power between 0.04 hz and 0.5 hz
-        // power low = 0.04-0.15 hz sympathetic activity                    // prepare body for action
-        // power high = 0.15-0.5 hz parasympathetic activity                // tranquil functions, rest and digest, feed and breed
-
-        var powerLow = powerVector[1]
-        var powerHigh = powerVector[2] + powerVector[3]
+        // rMSSD - root mean square of NN intervals
+        // sqrt ( sum ( NN(x) - NN(x-1) )^2 )/(n-1) )
+        // vDSP_rmsqv ?
+        
+        
+        // pNN50 - number of NN pairs > 50ms different than previous
+        // n50 / n * 100
+        
+    }
+    
+    
+    
+    
+    // heart rate between sympathetic and parasympathetic
+    // transition to sleep drops power percent in low frequency band from 62-44% to 46-36%
+    // athletes have high HRV, couch potatoes low
+    // can also be used to measure if we are over training
+    // power low = 0.05-0.15 hz sympathetic activity                    // prepare body for action
+    // power high = 0.15-0.5 hz parasympathetic activity                // tranquil functions, rest and digest, feed and breed
+    func calculateHF_LF(powerVector:[Float]){
+    
+        
+        let powerLowVector = Array(powerVector[lowPowerBinStart...lowPowerBinEnd])
+        let powerHighVector = Array(powerVector[highPowerBinStart...highPowerBinEnd])
+        var powerLow:Float = 0.0
+        var powerHigh:Float = 0.0
+        vDSP_sve(powerLowVector, 1, &powerLow, vDSP_Length(powerLowVector.count))
+        vDSP_sve(powerHighVector, 1, &powerHigh, vDSP_Length(powerHighVector.count))
+    
+    
         let totalPower = powerLow + powerHigh
-        
+    
         // clean up and send to user
         powerLow = powerLow/totalPower
         powerHigh = powerHigh/totalPower
@@ -466,82 +552,50 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         powerHigh *= 100.0
         HFBandLabel.text = ("High Frequency \(Int(powerHigh))")
         LFBandLabel.text = ("Low Frequency \(Int(powerLow))")
-        
-        
-        print("Ratio: \(ratio) PowerLow \(powerLow), PowerHigh \(powerHigh) BPM \(bpm), FPS \(fps)")
-        
-        
-        
-        ///////////////////////////////////////////////////////////////////////////////////////////////////////
-        // Heart rate variability
-       
-        
-        // do we have another way to count peaks per minute?
-        // find derivative, count sign changes?
-        //let dataPointsPerTenSeconds = Int(fps * 10)         // need to keep this smaller than our window size
-        
-        
-       // var smoothedData:[Float] = Array(count: dataPointsPerTenSeconds, repeatedValue: 0.0)
-        
-        
-        
-        /*
-        var x1:[Float] = inputSignal
-        x1.removeAtIndex(0)
-        
-        var dx:[Float] = Array(count: dataPointsPerTenSeconds, repeatedValue: 0.0)
-        vDSP_vsub(inputSignal, 1, x1, 1, &dx, 1, vDSP_Length(dataPointsPerTenSeconds))
-        
-        var indexCrossing:vDSP_Length = 0
-        var numberOfCrossings:vDSP_Length = 0
-        
-        vDSP_nzcros(dx, 1, vDSP_Length(dataPointsPerTenSeconds), &indexCrossing, &numberOfCrossings, vDSP_Length(dataPointsPerTenSeconds))
-       // var heartRate = Int(numberOfCrossings / 2) * 6      // 10 * 6 = 60 seconds, two crossings per peak
-        
-        
-        
-        
-        
-        var sumPowerVector:Float = 0.0
-        vDSP_sve(&powerVector+1, 1, &sumPowerVector, vDSP_Length(windowSize))
-        
-        if  sumPowerVector < 1.0 { print("locked ") }
-        */
-        
-        
-        /*
-        
-        let pointerToPowerVector = UnsafeMutablePointer<Float>(powerVector)
+    
+    
+        print("Ratio: \(ratio) PowerLow \(powerLow), PowerHigh \(powerHigh)")
 
-        var lowPower:Float = 0.0
-        vDSP_sve(pointerToPowerVector+7, 1, &lowPower, vDSP_Length(20))     // sum low frequencies
-
-        var highPower:Float = 0.0
-        vDSP_sve(pointerToPowerVector+27, 1, &highPower, vDSP_Length(65))
-
-            
-            
-        let logLowHigh = log(lowPower/highPower)
-            
-        //println("High \(highPower), low \(lowPower), log \(logLowHigh)")
-            
-        var lowBottom = 2.0 / Float(windowSize) * fps
-        var border = 10.0 / Float(windowSize) * fps
-        var highTop = 20.0 / Float(windowSize) * fps
-            
-       // println(" bottom \(lowBottom), border \(border), top \(highTop)")
-        
-        
-*/
-        
-        
-        
-
+    
     }
     
     
     
     
+    func calculateHeartRate (powerVector:[Float]){
+    
+        
+        // find peak power and bin
+        var power = 0.0 as Float
+        var bin = 0 as vDSP_Length
+        var powerData = powerVector
+        
+
+        //  calculate heart beats per minute ( pulse )
+        // We're looking for the bin with the highest power ( strongest frequency )
+        vDSP_maxvi(&powerData+minHRBinNumber, 1, &power, &bin, maxHRBinNumber)
+        let selectedBin = Int(bin) +  Int(minHRBinNumber)
+        
+        
+        // push heart rate data to the user
+        let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
+        timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
+        
+        
+        
+        // dump reasonable data to user
+        let bpm = Float(selectedBin) * binSizeBPM
+        if bpm > 35 && bpm < 250 {
+            pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
+        }
+        
+        let startPosition:Int = minHRBinNumber
+        let endPosition = minHRBinNumber + Int(maxHRBinNumber)
+        let pulsePowerVector = Array(powerVector[startPosition..<endPosition])
+        powerView.addAll(pulsePowerVector)
+
+    
+    }
     
     
     
@@ -562,8 +616,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     @IBAction func start(){
         
         // init graphs
-        graphView.setupGraphView()
-        powerView.setupGraphView()
+        setupGraphs()
 
         timeElapsedStart = NSDate()     // reset clock
         setupCamera(cameraFPS)          // setup device with preferred frames per second

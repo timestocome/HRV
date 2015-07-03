@@ -45,7 +45,7 @@ class VectorGraph: UIView
         halfHeight = height/2.0
         width = CGFloat(area.size.width)
         
-        dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
+        dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 1.0)
         scale = Float(area.height)       // view height /max possible value * scaled up to show small details
 
         
@@ -81,6 +81,8 @@ class VectorGraph: UIView
         let context = UIGraphicsGetCurrentContext()
         CGContextSetStrokeColor(context, [1.0, 0.0, 0.0, 1.0])
         let xScale = CGFloat(5.0)
+        
+        if numberOfDataPoints > dataArrayX.count { return }
         
         for i in 1..<numberOfDataPoints {
             
