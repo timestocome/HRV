@@ -8,6 +8,8 @@
 
 import Foundation
 import UIKit
+import Accelerate
+
 
 
 class GraphView: UIView
@@ -17,7 +19,6 @@ class GraphView: UIView
     // put up here as globals so we only have to calculate them one time
     var area: CGRect!
     var maxPoints: Int!
-    var width: CGFloat!
     var height: CGFloat!
     var halfHeight: CGFloat!
     var scale:Float = 1.0
@@ -40,7 +41,7 @@ class GraphView: UIView
         maxPoints = Int(area.size.width)
         height = CGFloat(area.size.height)
         halfHeight = CGFloat(height/2.0)
-
+        
         
         dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
         scale = Float(area.height) * 10.0       // view height /max possible value * scaled up to show small details
@@ -54,12 +55,12 @@ class GraphView: UIView
     
     
     func addAll(x: [Float]){
-        
+
         //***************   get max and figure out a scale ***************//
-        dataArrayX = x.map { CGFloat($0 as Float) * 1000.0 % self.height }
+        dataArrayX = x.map { CGFloat($0 as Float) * 1.0 % self.halfHeight }
         dataArrayX.removeAtIndex(0)
         
-        maxPoints = dataArrayX.count
+        maxPoints = dataArrayX.count / 2
         
         setNeedsDisplay()
     }
@@ -70,7 +71,6 @@ class GraphView: UIView
     
     
     func addX(x: Float){
-        
         
         // scale incoming data and insert it into data array
         let xScaled = CGFloat(x * scale % Float(halfHeight))
@@ -87,11 +87,13 @@ class GraphView: UIView
         
         let context = UIGraphicsGetCurrentContext()
         CGContextSetStrokeColor(context, [1.0, 0.0, 0.0, 1.0])
+        let points = dataArrayX.count
         
-        for i in 1..<maxPoints {
+        for i in 1..<points {
             
-            let x1 = CGFloat(i) * 3.0
-            let x2 = CGFloat(i-1) * 3.0
+            let x1 = CGFloat(i) * 2.0
+            let x2 = x1 - 2.0
+            
             
             // plot x
             CGContextMoveToPoint(context, x2, halfHeight - self.dataArrayX[i-1] )

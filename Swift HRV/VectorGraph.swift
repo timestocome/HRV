@@ -14,16 +14,14 @@ import UIKit
 class VectorGraph: UIView
 {
     
+    
     // graph dimensions
     // put up here as globals so we only have to calculate them one time
     var area: CGRect!
     var maxPoints: Int!
     var height: CGFloat!
     var halfHeight: CGFloat!
-    var width: CGFloat!
     var scale:Float = 1.0
-    var xScale:CGFloat = 1.0
-    var numberOfDataPoints = 1
     
     
     // incoming data to graph
@@ -42,18 +40,15 @@ class VectorGraph: UIView
         area = frame
         maxPoints = Int(area.size.width)
         height = CGFloat(area.size.height)
-        halfHeight = height/2.0
-        width = CGFloat(area.size.width)
+        halfHeight = CGFloat(height/2.0)
         
-        dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 1.0)
-        scale = Float(area.height)       // view height /max possible value * scaled up to show small details
-
+        
+        dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
+        scale = Float(area.height) * 10.0       // view height /max possible value * scaled up to show small details
         
         setNeedsDisplay()
         
     }
-    
-    
     
     
     
@@ -62,12 +57,11 @@ class VectorGraph: UIView
     func addAll(x: [Float]){
         
         //***************   get max and figure out a scale ***************//
-        dataArrayX = x.map { CGFloat($0 as Float) * 100.0 % self.halfHeight }
+        dataArrayX = x.map { CGFloat($0 as Float) * 1.0 % self.halfHeight }
         dataArrayX.removeAtIndex(0)
         
-        numberOfDataPoints = dataArrayX.count
-        xScale = CGFloat(numberOfDataPoints)/width
-                
+        maxPoints = dataArrayX.count / 2
+        
         setNeedsDisplay()
     }
     
@@ -76,23 +70,36 @@ class VectorGraph: UIView
     
     
     
+    func addX(x: Float){
+        
+        // scale incoming data and insert it into data array
+        let xScaled = CGFloat(x * scale % Float(halfHeight))
+        
+        dataArrayX.insert(xScaled, atIndex: 0)
+        dataArrayX.removeLast()
+        
+        setNeedsDisplay()
+    }
+    
+    
+    
     override func drawRect(rect: CGRect) {
         
         let context = UIGraphicsGetCurrentContext()
         CGContextSetStrokeColor(context, [1.0, 0.0, 0.0, 1.0])
-        let xScale = CGFloat(5.0)
+        let points = dataArrayX.count
         
-        if numberOfDataPoints > dataArrayX.count { return }
-        
-        for i in 1..<numberOfDataPoints {
+        for i in 1..<points {
             
-            let mark = CGFloat(i) * xScale
+            let x1 = CGFloat(i) * 2.0
+            let x2 = x1 - 2.0
+            
             
             // plot x
-            CGContextMoveToPoint(context, mark, height - self.dataArrayX[i] )
-            CGContextAddLineToPoint(context, mark-xScale, height - self.dataArrayX[i-1] )
+            CGContextMoveToPoint(context, x2, halfHeight - self.dataArrayX[i-1] )
+            CGContextAddLineToPoint(context, x1, halfHeight - self.dataArrayX[i] )
             
-            CGContextSetLineWidth(context, 3.0)
+            CGContextSetLineWidth(context, 2.0)
             CGContextStrokePath(context)
             
         }
