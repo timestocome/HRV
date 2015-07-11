@@ -18,14 +18,13 @@ class GraphView: UIView
     // graph dimensions
     // put up here as globals so we only have to calculate them one time
     var area: CGRect!
-    var maxPoints: Int!
+    var maxPoints: Int = 40
     var height: CGFloat!
     var halfHeight: CGFloat!
-    var scale:Float = 1.0
 
     
     // incoming data to graph
-    var dataArrayX:[CGFloat]!
+    var dataArrayX:[CGFloat] = Array(count: 320, repeatedValue: 0.0)
     
     
     
@@ -42,10 +41,6 @@ class GraphView: UIView
         height = CGFloat(area.size.height)
         halfHeight = CGFloat(height/2.0)
         
-        
-        dataArrayX = [CGFloat](count:maxPoints, repeatedValue: 0.0)
-        scale = Float(area.height) * 10.0       // view height /max possible value * scaled up to show small details
-        
         setNeedsDisplay()   
         
     }
@@ -56,11 +51,24 @@ class GraphView: UIView
     
     func addAll(x: [Float]){
 
+        // incoming data is 4096 points but our screen is only 320 and our graph 160
+        // so we need to shrink down the array
+        
+        var xArray:[Float] = Array(count: 40, repeatedValue: 0.0)
+        var scale = Float(height)
+        let stride = Int(x.count / 40)
+        
+        // scale and shrink it
+        vDSP_vsmul(x, stride, &scale, &xArray, 1, vDSP_Length(40))
+
+        // flip it
+        vDSP_vrvrs(&xArray, 1, vDSP_Length(40))
+
+        
         //***************   get max and figure out a scale ***************//
-        dataArrayX = x.map { CGFloat($0 as Float) * 1.0 % self.halfHeight }
+        dataArrayX = xArray.map { CGFloat($0 as Float) % self.halfHeight }
         dataArrayX.removeAtIndex(0)
         
-        maxPoints = dataArrayX.count / 2
         
         setNeedsDisplay()
     }
@@ -73,7 +81,7 @@ class GraphView: UIView
     func addX(x: Float){
         
         // scale incoming data and insert it into data array
-        let xScaled = CGFloat(x * scale % Float(halfHeight))
+        let xScaled = CGFloat(x % Float(halfHeight))
         
         dataArrayX.insert(xScaled, atIndex: 0)
         dataArrayX.removeLast()
@@ -89,17 +97,18 @@ class GraphView: UIView
         CGContextSetStrokeColor(context, [1.0, 0.0, 0.0, 1.0])
         let points = dataArrayX.count
         
+        
         for i in 1..<points {
             
-            let x1 = CGFloat(i) * 2.0
-            let x2 = x1 - 2.0
+            let x1 = CGFloat(i) * 8.0
+            let x2 = x1 - 8.0
             
             
             // plot x
             CGContextMoveToPoint(context, x2, halfHeight - self.dataArrayX[i-1] )
             CGContextAddLineToPoint(context, x1, halfHeight - self.dataArrayX[i] )
             
-            CGContextSetLineWidth(context, 2.0)
+            CGContextSetLineWidth(context, 4.0)
             CGContextStrokePath(context)
                         
         }

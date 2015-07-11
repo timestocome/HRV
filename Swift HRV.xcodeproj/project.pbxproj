@@ -13,7 +13,6 @@
 		370A6C7E1B20BC6500A7F565 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 370A6C7D1B20BC6500A7F565 /* Images.xcassets */; };
 		370A6C811B20BC6500A7F565 /* LaunchScreen.xib in Resources */ = {isa = PBXBuildFile; fileRef = 370A6C7F1B20BC6500A7F565 /* LaunchScreen.xib */; };
 		37AC3C9B1B275D8C0019B469 /* GraphView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37AC3C9A1B275D8C0019B469 /* GraphView.swift */; };
-		37AC3C9D1B2785650019B469 /* VectorGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37AC3C9C1B2785650019B469 /* VectorGraph.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -25,7 +24,6 @@
 		370A6C7D1B20BC6500A7F565 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		370A6C801B20BC6500A7F565 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.xib; name = Base; path = Base.lproj/LaunchScreen.xib; sourceTree = "<group>"; };
 		37AC3C9A1B275D8C0019B469 /* GraphView.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; name = GraphView.swift; path = ../GraphView.swift; sourceTree = "<group>"; };
-		37AC3C9C1B2785650019B469 /* VectorGraph.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = VectorGraph.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -62,7 +60,6 @@
 				370A6C781B20BC6500A7F565 /* ViewController.swift */,
 				370A6C7A1B20BC6500A7F565 /* Main.storyboard */,
 				37AC3C9A1B275D8C0019B469 /* GraphView.swift */,
-				37AC3C9C1B2785650019B469 /* VectorGraph.swift */,
 				370A6C7D1B20BC6500A7F565 /* Images.xcassets */,
 				370A6C7F1B20BC6500A7F565 /* LaunchScreen.xib */,
 				370A6C741B20BC6500A7F565 /* Supporting Files */,
@@ -150,7 +147,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				370A6C791B20BC6500A7F565 /* ViewController.swift in Sources */,
-				37AC3C9D1B2785650019B469 /* VectorGraph.swift in Sources */,
 				370A6C771B20BC6500A7F565 /* AppDelegate.swift in Sources */,
 				37AC3C9B1B275D8C0019B469 /* GraphView.swift in Sources */,
 			);
