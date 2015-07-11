@@ -37,7 +37,6 @@ class GraphView: UIView
     func setupGraphView() {
         
         area = frame
-        maxPoints = Int(area.size.width)
         height = CGFloat(area.size.height)
         halfHeight = CGFloat(height/2.0)
         
@@ -54,15 +53,15 @@ class GraphView: UIView
         // incoming data is 4096 points but our screen is only 320 and our graph 160
         // so we need to shrink down the array
         
-        var xArray:[Float] = Array(count: 40, repeatedValue: 0.0)
+        var xArray:[Float] = Array(count: maxPoints, repeatedValue: 0.0)
         var scale = Float(height)
-        let stride = Int(x.count / 40)
+        let stride = Int(x.count / maxPoints)
         
         // scale and shrink it
-        vDSP_vsmul(x, stride, &scale, &xArray, 1, vDSP_Length(40))
+        vDSP_vsmul(x, stride, &scale, &xArray, 1, vDSP_Length(maxPoints))
 
         // flip it
-        vDSP_vrvrs(&xArray, 1, vDSP_Length(40))
+        vDSP_vrvrs(&xArray, 1, vDSP_Length(maxPoints))
 
         
         //***************   get max and figure out a scale ***************//
