@@ -72,7 +72,7 @@
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="HF" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" id="Hzp-uJ-epo">
                                 <rect key="frame" x="209" y="517" width="160" height="21"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
@@ -114,7 +114,7 @@
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Ratio" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" id="ocH-TV-n7B">
                                 <rect key="frame" x="209" y="575" width="160" height="21"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
@@ -135,7 +135,21 @@
                             <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="LF" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" id="Eeg-8R-b1g">
                                 <rect key="frame" x="209" y="546" width="160" height="21"/>
                                 <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
-                                <fontDescription key="fontDescription" type="system" pointSize="15"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="RR Interval" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" id="Oyv-Tc-edG">
+                                <rect key="frame" x="195" y="604" width="160" height="21"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
+                                <nil key="highlightedColor"/>
+                            </label>
+                            <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Peaks per minute" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" id="Wth-cn-eTH">
+                                <rect key="frame" x="195" y="633" width="160" height="21"/>
+                                <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+                                <fontDescription key="fontDescription" type="system" pointSize="17"/>
                                 <color key="textColor" cocoaTouchSystemColor="darkTextColor"/>
                                 <nil key="highlightedColor"/>
                             </label>
@@ -149,10 +163,12 @@
                         <outlet property="avnnLabel" destination="0Rd-aT-DoI" id="j8Y-kQ-Nu9"/>
                         <outlet property="graphView" destination="LWs-b2-ZgH" id="ZUd-9K-M19"/>
                         <outlet property="n50Label" destination="dyS-dV-1Nm" id="Zql-PI-JkN"/>
+                        <outlet property="peaksPerMinuteLabel" destination="Wth-cn-eTH" id="3JW-6j-pxO"/>
                         <outlet property="pnn50Label" destination="AB3-zP-9nc" id="XaH-Tg-QnW"/>
                         <outlet property="pulseLabel" destination="E4q-jF-gNs" id="xwN-8J-BcZ"/>
                         <outlet property="ratioLabel" destination="ocH-TV-n7B" id="w6Y-F6-5d9"/>
                         <outlet property="rmssdLabel" destination="JCh-AB-9IG" id="hjG-kS-oec"/>
+                        <outlet property="rrIntervalLabel" destination="Oyv-Tc-edG" id="76Y-PY-C5o"/>
                         <outlet property="sdnnLabel" destination="osk-0Q-weI" id="rTw-bY-4ah"/>
                         <outlet property="timeLabel" destination="KFf-jR-Mdi" id="2fL-cb-Ubl"/>
                     </connections>

@@ -88,6 +88,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     @IBOutlet var rmssdLabel: UILabel!
     @IBOutlet var pnn50Label: UILabel!
     @IBOutlet var n50Label: UILabel!
+    @IBOutlet var rrIntervalLabel:UILabel!
+    @IBOutlet var peaksPerMinuteLabel:UILabel!
+    
 
     var timeElapsedStart:NSDate!
     
@@ -481,12 +484,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         if fps >= 240 {
             
             
-            // bandpass filter
-            var smoothedData:[Float] = Array(count: windowSize, repeatedValue: 0.0)
-            vDSP_deq22(inputSignal, 1, bandpassFilter, &smoothedData, 1, vDSP_Length(windowSize-2))
             
             
-            findPeaks(smoothedData)
+            findPeaks()
 
             calculateStats()
             
@@ -499,7 +499,10 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // update graphs
-        graphView.addAll(inputSignal)
+       // graphView.addAll(inputSignal)
+        let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
+        timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
+
 
     }
     
@@ -510,27 +513,41 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     // incoming raw data 4096 frames
     // at 240 fps ~17 seconds
-    func findPeaks(data:[Float]) {
+    func findPeaks() {
     
-    
-        // smooth the data
-        let rollingAverageLength = vDSP_Length(1024)
-        let arraySize = 1024        // should be about 1 frame per second after smoothing
         
-        var rollingAverage:[Float] = Array(count: arraySize, repeatedValue: 0.0)
-        vDSP_vswsum(data, 1, &rollingAverage, 1, rollingAverageLength, vDSP_Length(windowSize))
+    
+        // bandpass filter
+       // var smoothedData:[Float] = Array(count: windowSize, repeatedValue: 0.0)
+       // vDSP_deq22(inputSignal, 1, bandpassFilter, &smoothedData, 1, vDSP_Length(windowSize-2))
+
+        // smooth the data
+
+        var smoothedData = inputSignal
+        let arraySize = vDSP_Length(240)
+
+        
+       // var rollingAverage = smoothedData     // use if commenting out rolling average
+        var rollingAverage:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
+        vDSP_vswsum(smoothedData, 1, &rollingAverage, 1, arraySize, vDSP_Length(windowSize - 2))
+
+        
+        
+        graphView.addAll(rollingAverage)
+        
+        
         
         
         // find peaks and time difference
         
         // first derivative
-        var derivative1:[Float] = Array(count: arraySize, repeatedValue: 0.0)
-        vDSP_vsub(&rollingAverage+1, 1, rollingAverage, 1, &derivative1, 1, rollingAverageLength)
+        var derivative1:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
+        vDSP_vsub(&rollingAverage+1, 1, rollingAverage, 1, &derivative1, 1, arraySize)
         derivative1.removeLast()
         
         // second derivative
-        var derivative2:[Float] = Array(count: arraySize, repeatedValue: 0.0)
-        vDSP_vsub(&derivative1+1, 1, derivative1, 1, &derivative2, 1, rollingAverageLength)
+        var derivative2:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
+        vDSP_vsub(&derivative1+1, 1, derivative1, 1, &derivative2, 1, arraySize)
         derivative2.removeLast()
         
         
@@ -545,9 +562,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         // this is off check fps
         // fps running about 244 on iPhone 6
-       let peaksPerMinute = totalPeaks * (60.0 / Float(secondsPerWindow))
+        let peaksPerMinute = totalPeaks * (60.0 / Float(secondsPerWindow))
         numberOfPeaksArray.append(peaksPerMinute)
+        peaksPerMinuteLabel.text = ("Peaks/Min: \(peaksPerMinute)")
         
+        
+        
+
         
         // rolling data, use current window only for statistics
         if numberOfPeaksArray.count >= secondsPerWindow { numberOfPeaksArray.removeAtIndex(0) }
@@ -555,6 +576,11 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         // find pNN50
         pnn50(peakArray)
+        
+        
+        // find RR Interval
+        let rr = rrIntervalFromBPM(peaksPerMinute)
+        rrIntervalLabel.text = ("RR Interval: \(rr)")
 
     }
     
@@ -691,11 +717,10 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     
-    
+    // looks good
     // send power spectrum to here after FFT
     func calculateHeartRate (powerVector:[Float]){
     
-        
         let binSizeBPM = 1.0 / Float(windowSize) * (cameraFPS * 60.0)
 
         // find peak power and bin
@@ -716,15 +741,14 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         
         // push heart rate data to the user
-        let timeElapsed = NSDate().timeIntervalSinceDate(timeElapsedStart)
-        timeLabel.text = NSString(format: "Seconds: %d", Int(timeElapsed)) as String
-        
         let bpm = Float(selectedBin) * binSizeBPM
         pulseLabel.text = NSString(format: "%d BPM ", Int(bpm)) as String
     }
     
     
     
+    
+    func rrIntervalFromBPM(bpm:Float) ->Float { return (60.0/bpm) * 1000.0 }
     
     //////////////////////////////////////////////////////////////
     // UI start/stop camera

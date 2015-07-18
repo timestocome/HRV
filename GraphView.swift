@@ -18,7 +18,7 @@ class GraphView: UIView
     // graph dimensions
     // put up here as globals so we only have to calculate them one time
     var area: CGRect!
-    var maxPoints: Int = 40
+    var maxPoints: Int = 320
     var height: CGFloat!
     var halfHeight: CGFloat!
 
@@ -50,7 +50,7 @@ class GraphView: UIView
     
     func addAll(x: [Float]){
 
-        // incoming data is 4096 points but our screen is only 320 and our graph 160
+        // incoming data is ? points but our screen is only 320 and our graph 160
         // so we need to shrink down the array
         
         var xArray:[Float] = Array(count: maxPoints, repeatedValue: 0.0)
@@ -80,7 +80,7 @@ class GraphView: UIView
     func addX(x: Float){
         
         // scale incoming data and insert it into data array
-        let xScaled = CGFloat(x % Float(halfHeight))
+        let xScaled = CGFloat(x * 1000.0 % Float(halfHeight))
         
         dataArrayX.insert(xScaled, atIndex: 0)
         dataArrayX.removeLast()
@@ -99,15 +99,15 @@ class GraphView: UIView
         
         for i in 1..<points {
             
-            let x1 = CGFloat(i) * 8.0
-            let x2 = x1 - 8.0
+            let x1 = CGFloat(i) * 1.0
+            let x2 = x1 - 1.0
             
             
             // plot x
             CGContextMoveToPoint(context, x2, halfHeight - self.dataArrayX[i-1] )
             CGContextAddLineToPoint(context, x1, halfHeight - self.dataArrayX[i] )
             
-            CGContextSetLineWidth(context, 4.0)
+            CGContextSetLineWidth(context, 1.0)
             CGContextStrokePath(context)
                         
         }
