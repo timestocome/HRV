@@ -57,13 +57,10 @@ let windowSizeOverTwo = 2048         // for fft
 let cameraFPS:Float = 240.0
 let secondsPerWindow = 17       // 4096/240fps ~17 seconds per window
 
-// fastest, more accurate HR measurment uses
-// 60 fps, window size of 1024
-// 240 fps use window size of 4096
 
-
+// used for band pass filter
 let minBPM:Float = 30.0
-let maxBPM:Float = 300.0
+let maxBPM:Float = 200.0
 
 
 
@@ -150,9 +147,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     var highPowerBinEnd:Int!
     
     
-    // stores heart beats for use in HRV calculations
+    // stores heart beats per minute for use in HRV calculations
     var numberOfPeaksArray:[Float] = Array(count:1, repeatedValue: 0.0)
-    
+    var rrIntervalArray:[Float] = Array(count: 1, repeatedValue: 0.0)
     
     
     // set up filter array once, then reuse
@@ -201,9 +198,10 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         
         lowPowerBinStart = Int(0.05/binHz)
         lowPowerBinEnd = Int(0.15/binHz)
-        highPowerBinStart = Int(0.15/binHz)
+        highPowerBinStart = Int(0.15/binHz) + 1
         highPowerBinEnd = Int(0.5/binHz)
-        print("lf bins \(lowPowerBinStart) ... \(lowPowerBinEnd), hf bins \(highPowerBinStart) ... \(highPowerBinEnd)")
+        print("bin size: \(binHz)  lf bins \(lowPowerBinStart) ... \(lowPowerBinEnd), hf bins \(highPowerBinStart) ... \(highPowerBinEnd)")
+    
     }
     
     
@@ -515,75 +513,81 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     // at 240 fps ~17 seconds
     func findPeaks() {
     
-        
-    
+
         // bandpass filter
-       // var smoothedData:[Float] = Array(count: windowSize, repeatedValue: 0.0)
-       // vDSP_deq22(inputSignal, 1, bandpassFilter, &smoothedData, 1, vDSP_Length(windowSize-2))
-
-        // smooth the data
-
-        var smoothedData = inputSignal
-        let arraySize = vDSP_Length(240)
+        var smoothedData:[Float] = Array(count: windowSize, repeatedValue: 0.0)
+        vDSP_deq22(inputSignal, 1, bandpassFilter, &smoothedData, 1, vDSP_Length(windowSize-2))
 
         
-       // var rollingAverage = smoothedData     // use if commenting out rolling average
-        var rollingAverage:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
-        vDSP_vswsum(smoothedData, 1, &rollingAverage, 1, arraySize, vDSP_Length(windowSize - 2))
+        // smooth data
+        let maxPoints = 320
 
+        var rollingAverage:[Float] = Array(count: maxPoints, repeatedValue: 0.0)     // use if commenting out rolling average
+        var scale = Float(1000.0)
+        let stride = windowSize / maxPoints
+        
+        // scale and shrink it
+        vDSP_vsmul(smoothedData, stride, &scale, &rollingAverage, 1, vDSP_Length(maxPoints))
         
         
+        
+        // shift up to remove noise away from zero for zero crossing count
+        var max:Float = 0
+        vDSP_maxv(rollingAverage, 1, &max, vDSP_Length(maxPoints))
+        
+        var halfMax = max / 2.0
+        vDSP_vsadd(rollingAverage, 1, &halfMax, &rollingAverage, 1, vDSP_Length(maxPoints))
+        
+        
+        
+        // draw cleaned up signal
         graphView.addAll(rollingAverage)
         
         
         
+        // count times we cross zero on x axis
+        var rollingAverageZeros:vDSP_Length = 0
+        var lastZero:vDSP_Length = 0
         
-        // find peaks and time difference
+        vDSP_nzcros(rollingAverage, 1, vDSP_Length(maxPoints), &lastZero, &rollingAverageZeros, vDSP_Length(maxPoints))
         
-        // first derivative
-        var derivative1:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
-        vDSP_vsub(&rollingAverage+1, 1, rollingAverage, 1, &derivative1, 1, arraySize)
-        derivative1.removeLast()
+        // convert number of zero crossings into heart rate
+        let peaksPerMinute = (rollingAverageZeros / 2) * (60 / 17)  // each peak/dip crosses zero twice, then adjust for 17 seconds/1 minute
         
-        // second derivative
-        var derivative2:[Float] = Array(count: Int(arraySize), repeatedValue: 0.0)
-        vDSP_vsub(&derivative1+1, 1, derivative1, 1, &derivative2, 1, arraySize)
-        derivative2.removeLast()
-        
-        
-        // get bottom by looking for lowest, save time stamp, look for next lowest...
-        var peakArray = derivative2.map(threshold)
-        
-        
-        // total peaks in window
-        var totalPeaks:Float = 0.0
-        vDSP_sve(&peakArray, 1, &totalPeaks, vDSP_Length(peakArray.count))
-        
-        
-        // this is off check fps
-        // fps running about 244 on iPhone 6
-        let peaksPerMinute = totalPeaks * (60.0 / Float(secondsPerWindow))
-        numberOfPeaksArray.append(peaksPerMinute)
         peaksPerMinuteLabel.text = ("Peaks/Min: \(peaksPerMinute)")
         
+        numberOfPeaksArray.append(Float(peaksPerMinute))
         
+        
+        // find RR Interval
+        let rr = rrIntervalFromBPM(Float(peaksPerMinute))
+        rrIntervalLabel.text = ("RR Interval: \(rr)")
+        rrIntervalArray.append(rr)
+        if rrIntervalArray.count >= secondsPerWindow { rrIntervalArray.removeAtIndex(0) }
+
         
 
+
+        
         
         // rolling data, use current window only for statistics
         if numberOfPeaksArray.count >= secondsPerWindow { numberOfPeaksArray.removeAtIndex(0) }
         
         
+        
+        
         // find pNN50
+        // use peaks to find time differences
+        let peakArray = rollingAverage.map(threshold)
         pnn50(peakArray)
         
         
-        // find RR Interval
-        let rr = rrIntervalFromBPM(peaksPerMinute)
-        rrIntervalLabel.text = ("RR Interval: \(rr)")
-
+        
+        // misc calculations
+        calculateStats()
+        
+      
     }
-    
     
     func threshold(value:Float)->Float{ if value >= 0 { return 0.0 }else{ return 1.0 } }
     
@@ -626,11 +630,13 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         var totalPeaks:Float = 0.0
         vDSP_sve(peaksArray, 1, &totalPeaks, vDSP_Length(arrayLength))
         
-        let pNN50 = Float(n50) / (totalPeaks) * 100.0
         
-        n50Label.text = ("n50: \(n50)")
-        pnn50Label.text = ("pNN50 \(pNN50)")
+        if totalPeaks > 0 {
+            let pNN50 = Int(Float(n50) / (totalPeaks) * 100.0)
         
+            n50Label.text = ("n50: \(n50)")
+            pnn50Label.text = ("pNN50 \(pNN50)")
+        }
     }
     
     
@@ -645,13 +651,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     func calculateStats (){
     
         
-        // number of peaks is a per second count of heart beats during our 17 second window
-        
-        
-        // AVNN - mean NN - use
-        // vDSP_meanv ?
+        // AVNN - mean NN
         var avnn:Float = 0.0
-        vDSP_meanv(numberOfPeaksArray, 1, &avnn, vDSP_Length(numberOfPeaksArray.count))
+        vDSP_meanv(rrIntervalArray, 1, &avnn, vDSP_Length(rrIntervalArray.count))
         avnnLabel.text = ("AVNN: \(avnn)")
         
         
@@ -660,7 +662,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         //     remove median
         var negativeAVNN = -avnn
         var nnLessMedian:[Float] = Array(count: 10, repeatedValue: 0.0)
-        vDSP_vsadd(numberOfPeaksArray, 1, &negativeAVNN, &nnLessMedian, 1, vDSP_Length(10))
+        vDSP_vsadd(rrIntervalArray, 1, &negativeAVNN, &nnLessMedian, 1, vDSP_Length(10))
         
         // compute rms
         var sdnn:Float = 0.0
@@ -673,7 +675,7 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
         // sqrt ( sum ( NN(x) - NN(x-1) )^2 )/(n-1) )
         var rmssd:Float = 0.0
         var nnDiff:[Float] = Array(count: 10, repeatedValue: 0.0)
-        vDSP_vsub(&numberOfPeaksArray+1, 1, numberOfPeaksArray, 1, &nnDiff, 1, vDSP_Length(9))
+        vDSP_vsub(&rrIntervalArray+1, 1, rrIntervalArray, 1, &nnDiff, 1, vDSP_Length(9))
         vDSP_rmsqv(nnDiff, 1, &rmssd, 9)
         rmssdLabel.text = ("rMSSD: \(rmssd)")
         
@@ -749,6 +751,9 @@ class ViewController: UIViewController, AVCaptureVideoDataOutputSampleBufferDele
     
     
     func rrIntervalFromBPM(bpm:Float) ->Float { return (60.0/bpm) * 1000.0 }
+    
+    
+    
     
     //////////////////////////////////////////////////////////////
     // UI start/stop camera

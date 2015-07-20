@@ -50,23 +50,11 @@ class GraphView: UIView
     
     func addAll(x: [Float]){
 
-        // incoming data is ? points but our screen is only 320 and our graph 160
-        // so we need to shrink down the array
-        
-        var xArray:[Float] = Array(count: maxPoints, repeatedValue: 0.0)
-        var scale = Float(height)
-        let stride = Int(x.count / maxPoints)
-        
-        // scale and shrink it
-        vDSP_vsmul(x, stride, &scale, &xArray, 1, vDSP_Length(maxPoints))
-
-        // flip it
-        vDSP_vrvrs(&xArray, 1, vDSP_Length(maxPoints))
-
         
         //***************   get max and figure out a scale ***************//
-        dataArrayX = xArray.map { CGFloat($0 as Float) % self.halfHeight }
+        dataArrayX = x.map { CGFloat($0 as Float) % self.halfHeight }
         dataArrayX.removeAtIndex(0)
+        
         
         
         setNeedsDisplay()
@@ -80,7 +68,7 @@ class GraphView: UIView
     func addX(x: Float){
         
         // scale incoming data and insert it into data array
-        let xScaled = CGFloat(x * 1000.0 % Float(halfHeight))
+        let xScaled = CGFloat(x * 1.0 % Float(halfHeight))
         
         dataArrayX.insert(xScaled, atIndex: 0)
         dataArrayX.removeLast()
